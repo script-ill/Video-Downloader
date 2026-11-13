@@ -1,0 +1,6 @@
+{
+  "name": "Social Media Video Downloader",
+  "description": "High-quality video and audio downloader for YouTube, Instagram, TikTok, Twitter/X, Facebook, and more with 4K, 1080p, and MP3 format support.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
