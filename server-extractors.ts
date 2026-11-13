@@ -73,14 +73,6 @@ export function formatDuration(seconds: number | null | undefined): string {
   return `${mins}:${secs.toString().padStart(2, '0')}`;
 }
 
-export function formatViews(views: number | null | undefined): string {
-  if (!views || views <= 0 || isNaN(views)) return '';
-  if (views >= 1_000_000_000) return `${(views / 1_000_000_000).toFixed(1)}B views`;
-  if (views >= 1_000_000) return `${(views / 1_000_000).toFixed(1)}M views`;
-  if (views >= 1_000) return `${(views / 1_000).toFixed(1)}K views`;
-  return `${views} views`;
-}
-
 // ============================================================================
 // YOUTUBE ENGINE (youtubei.js + bgutils-js BotGuard PO Token)
 // ============================================================================
@@ -96,7 +88,6 @@ interface YouTubeSession {
 const YT_SESSION_TTL_MS = 4 * 60 * 60 * 1000; // 4 hours
 let cachedSession: YouTubeSession | null = null;
 let sessionInitPromise: Promise<YouTubeSession> | null = null;
-let searchClientPromise: Promise<Innertube> | null = null;
 
 interface CachedVideoEntry {
   expiresAt: number;
@@ -127,58 +118,6 @@ export function extractYouTubeVideoId(rawUrl: string): string | null {
   }
   const m = rawUrl.match(/(?:v=|youtu\.be\/|shorts\/|embed\/|live\/)([a-zA-Z0-9_-]{11})/);
   return m ? m[1] : null;
-}
-
-async function getSearchClient(): Promise<Innertube> {
-  if (!searchClientPromise) {
-    searchClientPromise = Innertube.create({ retrieve_player: false }).catch((err) => {
-      searchClientPromise = null;
-      throw err;
-    });
-  }
-  return searchClientPromise;
-}
-
-export async function searchYouTube(query: string, limit = 12) {
-  const yt = await getSearchClient();
-  const search = await yt.search(query, { type: 'video' });
-  const results: any[] = [];
-
-  for (const item of search.results || []) {
-    if (results.length >= limit) break;
-    const v = item as any;
-    if (!v.id || (v.type !== 'Video' && !v.title)) continue;
-
-    const title = v.title?.text || v.title?.toString?.() || 'Untitled Video';
-    const uploader = v.author?.name || v.channel?.name || 'Creator';
-    const duration = v.duration?.seconds || 0;
-    const durationFormatted = v.duration?.text || formatDuration(duration);
-    const thumb =
-      v.thumbnails?.[0]?.url ||
-      v.best_thumbnail?.url ||
-      `https://i.ytimg.com/vi/${v.id}/hqdefault.jpg`;
-
-    const viewText = v.short_view_count?.text || v.view_count?.text || '';
-    let viewCount: number | null = null;
-    if (v.view_count?.text) {
-      const digits = v.view_count.text.replace(/[^\d]/g, '');
-      if (digits) viewCount = parseInt(digits, 10);
-    }
-
-    results.push({
-      id: v.id,
-      url: `https://www.youtube.com/watch?v=${v.id}`,
-      title,
-      uploader,
-      duration,
-      durationFormatted,
-      viewCount,
-      viewCountFormatted: viewText || formatViews(viewCount),
-      thumbnail: thumb,
-    });
-  }
-
-  return results;
 }
 
 async function createYouTubeSession(): Promise<YouTubeSession> {
@@ -976,37 +915,5 @@ export async function extractTwitterData(user: string, id: string, originalUrl: 
     bestUrl,
     variants,
   };
-}
-
-// ============================================================================
-// DAILYMOTION SEARCH ENGINE (Reliable datacenter-friendly full-length streams)
-// ============================================================================
-
-export async function searchDailymotion(query: string, limit = 6) {
-  const endpoint = `https://api.dailymotion.com/videos?search=${encodeURIComponent(
-    query
-  )}&limit=${limit}&fields=id,title,duration,views_total,owner.screenname,url,thumbnail_720_url`;
-  const res = await fetch(endpoint, {
-    headers: { 'User-Agent': 'StreamGrabDownloader/1.0' },
-    signal: AbortSignal.timeout(6000),
-  });
-  if (!res.ok) return [];
-  const data = await res.json();
-  const list: any[] = data.list || [];
-
-  return list
-    .filter((v) => v.id && v.url)
-    .map((v) => ({
-      id: `dm_${v.id}`,
-      url: v.url,
-      title: v.title || 'Untitled Video',
-      uploader: v['owner.screenname'] || 'Dailymotion Creator',
-      duration: v.duration || 0,
-      durationFormatted: formatDuration(v.duration || 0),
-      viewCount: v.views_total || null,
-      viewCountFormatted: formatViews(v.views_total),
-      thumbnail: v.thumbnail_720_url || `https://www.dailymotion.com/thumbnail/video/${v.id}`,
-      source: 'dailymotion',
-    }));
 }
 

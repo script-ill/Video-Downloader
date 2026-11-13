@@ -66,19 +66,6 @@ export interface DownloadJob {
   timestamp: number;
 }
 
-export interface SearchResultItem {
-  id: string;
-  url: string;
-  title: string;
-  uploader: string;
-  duration: number;
-  durationFormatted: string;
-  viewCount?: number;
-  viewCountFormatted?: string;
-  thumbnail: string;
-  source?: string;
-}
-
 export interface DownloadHistoryItem {
   id: string;
   title: string;

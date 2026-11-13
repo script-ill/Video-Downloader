@@ -9,8 +9,6 @@ import { DownloadProgressModal } from './components/DownloadProgressModal';
 import { BatchDownloaderModal } from './components/BatchDownloaderModal';
 import { DownloadHistorySection } from './components/DownloadHistorySection';
 import { PlatformFeaturesSection } from './components/PlatformFeaturesSection';
-import { SearchResultsList } from './components/SearchResultsList';
-import { QualityPickerModal } from './components/QualityPickerModal';
 import { AboutSection } from './components/AboutSection';
 import { Footer } from './components/Footer';
 import { 
@@ -18,15 +16,13 @@ import {
   VideoFormat, 
   DownloadJob, 
   DownloadHistoryItem, 
-  SocialPlatform,
-  SearchResultItem 
+  SocialPlatform 
 } from './types';
 import { detectPlatformFromUrl } from './utils/formatters';
 import { 
   extractVideoMetadata, 
   startDownloadJob, 
   checkServerHealth,
-  searchVideos,
   saveCookies,
   getCookiesStatus
 } from './services/api';
@@ -37,7 +33,6 @@ import {
   History, 
   Layers, 
   Info, 
-  Search,
   KeyRound,
   CheckCircle2
 } from 'lucide-react';
@@ -48,37 +43,12 @@ export default function App() {
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Search feature states
-  const [activeInputMode, setActiveInputMode] = useState<'url' | 'search'>('url');
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<SearchResultItem[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [searchError, setSearchError] = useState<string | null>(null);
-
-  // Active tab state: 'downloader' | 'search' | 'history' | 'about'
-  const [currentTab, setCurrentTab] = useState<'downloader' | 'search' | 'history' | 'about'>('downloader');
+  // Active tab state: 'downloader' | 'history' | 'about'
+  const [currentTab, setCurrentTab] = useState<'downloader' | 'history' | 'about'>('downloader');
 
   const [activeJob, setActiveJob] = useState<DownloadJob | null>(null);
   const [isPreviewOpen, setIsPreviewOpen] = useState(false);
   const [isBatchOpen, setIsBatchOpen] = useState(false);
-
-  // Quality Picker Modal state (for responsive touch-friendly quality picking)
-  const [qualityModalState, setQualityModalState] = useState<{
-    isOpen: boolean;
-    url: string;
-    title: string;
-    metadata: VideoMetadata | null;
-    isLoading: boolean;
-    error: string | null;
-  }>({
-    isOpen: false,
-    url: '',
-    title: '',
-    metadata: null,
-    isLoading: false,
-    error: null,
-  });
-  const [loadingSearchResultUrl, setLoadingSearchResultUrl] = useState<string | null>(null);
 
   const [history, setHistory] = useState<DownloadHistoryItem[]>(() => {
     try {
@@ -98,7 +68,6 @@ export default function App() {
   const resultRef = useRef<HTMLDivElement>(null);
   const historyRef = useRef<HTMLDivElement>(null);
   const aboutRef = useRef<HTMLDivElement>(null);
-  const searchResultsRef = useRef<HTMLDivElement>(null);
 
   // Check server health & cookie status on load
   useEffect(() => {
@@ -141,64 +110,7 @@ export default function App() {
     }
   };
 
-  const handleSearch = async (query: string) => {
-    const q = query.trim();
-    if (!q) return;
-    setIsSearching(true);
-    setSearchError(null);
-    setSearchQuery(q);
-    setCurrentTab('search');
-    setActiveInputMode('search');
-
-    try {
-      const items = await searchVideos(q, 15);
-      setSearchResults(items);
-      setTimeout(() => {
-        searchResultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-      }, 100);
-    } catch (err: any) {
-      setSearchError(err.message || 'Search failed. Please try another query or keyword.');
-      setSearchResults([]);
-    } finally {
-      setIsSearching(false);
-    }
-  };
-
-  const handleSelectSearchResult = async (videoUrl: string, videoTitle?: string) => {
-    setUrl(videoUrl);
-    setLoadingSearchResultUrl(videoUrl);
-    setQualityModalState({
-      isOpen: true,
-      url: videoUrl,
-      title: videoTitle || 'Selected Video',
-      metadata: null,
-      isLoading: true,
-      error: null,
-    });
-
-    try {
-      const data = await extractVideoMetadata(videoUrl);
-      setMetadata(data);
-      setQualityModalState((prev) => ({
-        ...prev,
-        metadata: data,
-        title: data.title || prev.title,
-        isLoading: false,
-        error: null,
-      }));
-    } catch (err: any) {
-      console.error('Failed to extract formats for modal:', err);
-      setQualityModalState((prev) => ({
-        ...prev,
-        isLoading: false,
-        error: err.message || 'Unable to analyze detailed stream formats. You can still use the direct download buttons below.',
-      }));
-    } finally {
-      setLoadingSearchResultUrl(null);
-    }
-  };
-
-  const handleQuickDownloadFromResult = async (
+  const handleRetryJob = async (
     videoUrl: string,
     videoTitle: string,
     formatId: string,
@@ -211,16 +123,6 @@ export default function App() {
     } catch (err: any) {
       setError(`Could not start download: ${err.message}`);
     }
-  };
-
-  const handlePreviewFromResult = async (videoUrl: string, videoTitle: string) => {
-    if (metadata && metadata.url === videoUrl) {
-      setIsPreviewOpen(true);
-      return;
-    }
-    // Extract metadata to allow full preview & audio playback
-    setUrl(videoUrl);
-    handleFetchVideo(videoUrl);
   };
 
   const handleStartDownload = async (format: VideoFormat) => {
@@ -300,7 +202,7 @@ export default function App() {
         <div className="text-center w-full mb-4">
           <div className="inline-flex items-center space-x-1.5 px-3 py-1 rounded-full bg-indigo-50 dark:bg-indigo-950/60 border border-indigo-200/60 dark:border-indigo-800/40 text-indigo-700 dark:text-indigo-300 text-xs font-bold mb-2.5">
             <Sparkles className="w-3.5 h-3.5 text-indigo-500 shrink-0" />
-            <span>StreamGrab APK • Search &amp; 4K Downloader</span>
+            <span>StreamGrab APK • Universal 4K Downloader</span>
           </div>
 
           <h1 className="text-xl sm:text-3xl font-extrabold text-zinc-900 dark:text-white tracking-tight leading-snug">
@@ -310,12 +212,12 @@ export default function App() {
             </span>
           </h1>
           <p className="text-xs text-zinc-500 dark:text-zinc-400 mt-1 max-w-md mx-auto">
-            Search songs &amp; clips by name or paste links from YouTube, TikTok, Instagram, Twitter, and Reddit.
+            Paste video links from YouTube, TikTok, Instagram, Twitter, Vimeo, and Reddit.
           </p>
         </div>
 
         {/* Centered Icon-Only Segmented Navigation Bar */}
-        <div className="w-full bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs mb-5 grid grid-cols-5 gap-1">
+        <div className="w-full bg-white dark:bg-zinc-900 p-1.5 rounded-2xl border border-zinc-200 dark:border-zinc-800 shadow-xs mb-5 grid grid-cols-4 gap-1">
           {/* 1. Downloader Tab */}
           <button
             id="menu-tab-downloader"
@@ -332,37 +234,7 @@ export default function App() {
             <Download className="w-4.5 h-4.5" />
           </button>
 
-          {/* 2. Search & Download Tab */}
-          <button
-            id="menu-tab-search"
-            type="button"
-            title="Search & Download"
-            aria-label="Search & Download"
-            onClick={() => {
-              setCurrentTab('search');
-              setActiveInputMode('search');
-            }}
-            className={`relative flex items-center justify-center h-10 rounded-xl transition cursor-pointer ${
-              currentTab === 'search'
-                ? 'bg-indigo-600 text-white shadow-xs'
-                : 'text-zinc-600 dark:text-zinc-400 hover:text-zinc-900 dark:hover:text-white hover:bg-zinc-100 dark:hover:bg-zinc-800/60'
-            }`}
-          >
-            <Search className="w-4.5 h-4.5" />
-            {searchResults.length > 0 && (
-              <span
-                className={`absolute top-1 right-2 min-w-[16px] h-[16px] px-1 rounded-full text-[9px] font-bold flex items-center justify-center ${
-                  currentTab === 'search'
-                    ? 'bg-white text-indigo-600'
-                    : 'bg-indigo-600 text-white'
-                }`}
-              >
-                {searchResults.length}
-              </span>
-            )}
-          </button>
-
-          {/* 3. History Tab */}
+          {/* 2. History Tab */}
           <button
             id="menu-tab-history"
             type="button"
@@ -421,26 +293,21 @@ export default function App() {
           </button>
         </div>
 
-        {/* Universal Input Bar (Handles both Direct Links and Search queries automatically) */}
+        {/* Direct Link Input Bar */}
         <div className="w-full mb-5">
           <UrlInputBar
             url={url}
             onChangeUrl={(val) => {
               setUrl(val);
               if (error) setError(null);
-              if (searchError) setSearchError(null);
             }}
             onSubmitUrl={handleFetchVideo}
-            onSearch={handleSearch}
-            isLoading={isLoading || isSearching}
+            isLoading={isLoading}
             onClear={() => {
               setUrl('');
               setMetadata(null);
               setError(null);
-              setSearchError(null);
             }}
-            activeMode={activeInputMode}
-            onChangeMode={(mode) => setActiveInputMode(mode)}
           />
 
           {/* URL Extraction Error Box */}
@@ -520,22 +387,6 @@ export default function App() {
               </button>
             </div>
           )}
-
-          {/* Search Error Alert Box */}
-          {searchError && (
-            <div
-              id="search-error-box"
-              className="mt-3 p-3.5 rounded-xl bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-900/60 text-amber-800 dark:text-amber-300 text-xs flex items-start space-x-2.5"
-            >
-              <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-600" />
-              <div className="min-w-0">
-                <p className="font-bold">Search Notice</p>
-                <p className="mt-0.5 text-amber-700 dark:text-amber-400 text-xs leading-relaxed">
-                  {searchError}
-                </p>
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Tab 1: Centered Downloader View */}
@@ -547,7 +398,6 @@ export default function App() {
                 currentPlatform={currentPlatform}
                 onSelectSample={(sampleUrl) => {
                   setUrl(sampleUrl);
-                  setActiveInputMode('url');
                   handleFetchVideo(sampleUrl);
                 }}
               />
@@ -571,26 +421,7 @@ export default function App() {
           </div>
         )}
 
-        {/* Tab 2: Centered Search & Download View */}
-        {currentTab === 'search' && (
-          <div ref={searchResultsRef} className="w-full space-y-4 animate-fade-in">
-            <SearchResultsList
-              query={searchQuery}
-              results={searchResults}
-              isLoading={isSearching}
-              onSelectVideo={handleSelectSearchResult}
-              onQuickDownload={handleQuickDownloadFromResult}
-              onPreview={handlePreviewFromResult}
-              onSearchSuggested={(term) => {
-                setUrl(term);
-                handleSearch(term);
-              }}
-              loadingUrl={loadingSearchResultUrl}
-            />
-          </div>
-        )}
-
-        {/* Tab 3: Centered History Section */}
+        {/* Tab 2: Centered History Section */}
         <div
           ref={historyRef}
           className={`w-full mt-6 ${
@@ -602,7 +433,6 @@ export default function App() {
             onClearHistory={handleClearHistory}
             onSelectUrl={(prevUrl) => {
               setUrl(prevUrl);
-              setActiveInputMode('url');
               setCurrentTab('downloader');
               handleFetchVideo(prevUrl);
             }}
@@ -643,7 +473,7 @@ export default function App() {
           onComplete={handleDownloadCompleted}
           onRetry={(failedJob) => {
             setHasCookies(true);
-            handleQuickDownloadFromResult(
+            handleRetryJob(
               failedJob.url,
               failedJob.title,
               failedJob.formatId,
@@ -661,36 +491,6 @@ export default function App() {
           onAddHistory={handleAddBatchHistory}
         />
       )}
-
-      {/* Quality Picker Modal (Responsive Touch-friendly format selector) */}
-      <QualityPickerModal
-        isOpen={qualityModalState.isOpen}
-        onClose={() => setQualityModalState((prev) => ({ ...prev, isOpen: false }))}
-        metadata={qualityModalState.metadata}
-        isLoading={qualityModalState.isLoading}
-        error={qualityModalState.error}
-        videoTitle={qualityModalState.title}
-        videoUrl={qualityModalState.url}
-        onStartDownload={(format) => {
-          const targetUrl = qualityModalState.metadata?.url || qualityModalState.url;
-          const targetTitle = qualityModalState.metadata?.title || qualityModalState.title;
-          if (targetUrl) {
-            handleQuickDownloadFromResult(
-              targetUrl,
-              targetTitle,
-              format.id,
-              format.ext,
-              format.label
-            );
-          }
-        }}
-        onOpenFullStudio={() => {
-          setCurrentTab('downloader');
-          setTimeout(() => {
-            resultRef.current?.scrollIntoView({ behavior: 'smooth' });
-          }, 100);
-        }}
-      />
     </div>
   );
 }

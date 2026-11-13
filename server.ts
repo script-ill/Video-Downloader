@@ -10,16 +10,13 @@ import {
   saveUserCookies,
   formatBytes,
   formatDuration,
-  formatViews,
   extractYouTubeVideoId,
-  searchYouTube,
   extractYouTubeMetadata,
   resolveYouTubeDownload,
   extractVimeoId,
   extractVimeoData,
   extractTweetParams,
   extractTwitterData,
-  searchDailymotion,
 } from './server-extractors';
 
 const execFileAsync = promisify(execFile);
@@ -1207,93 +1204,7 @@ app.get('/api/jobs/:id', (req, res) => {
   });
 });
 
-// 5. Search videos by filename, title, or keyword (Dailymotion Fast-Stream + YouTube Innertube)
-app.get('/api/search', async (req, res) => {
-  const query = (req.query.q as string)?.trim();
-  if (!query) {
-    return res.status(400).json({ error: 'Search query parameter "q" is required.' });
-  }
-
-  const limit = Math.min(parseInt((req.query.limit as string) || '12', 10), 25);
-
-  try {
-    const [dmSettled, ytSettled] = await Promise.allSettled([
-      searchDailymotion(query, Math.min(5, limit)),
-      searchYouTube(query, limit),
-    ]);
-
-    const dmResults = dmSettled.status === 'fulfilled' ? dmSettled.value : [];
-    const ytResults =
-      ytSettled.status === 'fulfilled'
-        ? ytSettled.value.map((r: any) => ({ ...r, source: 'youtube' }))
-        : [];
-
-    // Prioritize cloud-ready Dailymotion streams when cookies aren't configured so 1-click search downloads succeed reliably,
-    // while keeping full YouTube search catalog right alongside them.
-    const combined = hasUserCookies()
-      ? [...ytResults, ...dmResults]
-      : [...dmResults.slice(0, 3), ...ytResults, ...dmResults.slice(3)];
-
-    if (combined.length > 0) {
-      return res.json({
-        success: true,
-        query,
-        count: combined.slice(0, limit).length,
-        results: combined.slice(0, limit),
-      });
-    }
-  } catch (searchErr: any) {
-    console.warn('Hybrid search failed, falling back to yt-dlp:', searchErr.message);
-  }
-
-  try {
-    const args = [
-      ...getYtDlpBaseArgs(),
-      `ytsearch${limit}:${query}`,
-      '-J',
-      '--flat-playlist',
-    ];
-
-    const { stdout } = await execFileAsync(YT_DLP_PATH, args, { maxBuffer: 10 * 1024 * 1024 });
-    const raw = JSON.parse(stdout);
-    const rawEntries = raw.entries || [];
-    const results = rawEntries.map((entry: any) => {
-      let thumb = '';
-      if (entry.thumbnails && entry.thumbnails.length > 0) {
-        thumb = entry.thumbnails[entry.thumbnails.length - 1]?.url || entry.thumbnails[0]?.url;
-      } else if (entry.thumbnail) {
-        thumb = entry.thumbnail;
-      } else if (entry.id) {
-        thumb = `https://i.ytimg.com/vi/${entry.id}/hqdefault.jpg`;
-      }
-
-      const duration = entry.duration || 0;
-      return {
-        id: entry.id,
-        url: entry.url || `https://www.youtube.com/watch?v=${entry.id}`,
-        title: entry.title || 'Untitled Video',
-        uploader: entry.channel || entry.uploader || 'Creator',
-        duration,
-        durationFormatted: formatDuration(duration),
-        viewCount: entry.view_count || null,
-        viewCountFormatted: formatViews(entry.view_count),
-        thumbnail: thumb,
-        source: 'youtube',
-      };
-    });
-
-    res.json({
-      success: true,
-      query,
-      count: results.length,
-      results,
-    });
-  } catch (err: any) {
-    res.status(500).json({ error: 'Search failed.', message: err.message });
-  }
-});
-
-// 6. Download ready file
+// 5. Download ready file
 app.get('/api/jobs/:id/file', (req, res) => {
   const job = jobs.get(req.params.id);
   if (!job || job.status !== 'ready' || !job.filePath || !fs.existsSync(job.filePath)) {

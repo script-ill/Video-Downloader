@@ -1,4 +1,4 @@
-import { DownloadJob, SearchResultItem, VideoMetadata } from '../types';
+import { DownloadJob, VideoMetadata } from '../types';
 
 export async function checkServerHealth(): Promise<{ status: string; ytdlp: boolean; ffmpeg: boolean }> {
   try {
@@ -25,19 +25,6 @@ export async function extractVideoMetadata(url: string): Promise<VideoMetadata> 
   }
 
   return data.data;
-}
-
-export async function searchVideos(query: string, limit: number = 12): Promise<SearchResultItem[]> {
-  const params = new URLSearchParams({
-    q: query.trim(),
-    limit: limit.toString(),
-  });
-  const res = await fetch(`/api/search?${params.toString()}`);
-  const data = await res.json();
-  if (!res.ok) {
-    throw new Error(data.error || 'Search request failed.');
-  }
-  return data.results || [];
 }
 
 export async function startDownloadJob(
